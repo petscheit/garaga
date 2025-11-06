@@ -31,7 +31,7 @@ use garaga::definitions::{
     BLS12_381_SEED_BITS_COMPRESSED, BN254_SEED_BITS_JY00_COMPRESSED, E12D, G1G2Pair, G1Point,
     G2Line, G2Point, get_BN254_modulus, get_modulus, u288,
 };
-use garaga::ec_ops::{G1PointTrait, msm_g1};
+use garaga::ec_ops::{G1PointTrait, ec_safe_add, msm_g1};
 use garaga::ec_ops_g2::G2PointTrait;
 use garaga::pairing_check::{
     BLSProcessedPair, BNProcessedPair, MPCheckHintBLS12_381, MPCheckHintBN254,
@@ -85,9 +85,10 @@ pub fn verify_groth16_bn254(
     public_inputs_msm_hint: Span<felt252>,
     mpcheck_hint: MPCheckHintBN254,
 ) -> bool {
-    let vk_x: G1Point = msm_g1(
+    let vk_x_x: G1Point = msm_g1(
         ic.slice(1, ic.len() - 1), proof.public_inputs, 0, public_inputs_msm_hint,
     );
+    let vk_x = ec_safe_add(vk_x_x, *ic.at(0), 0);
 
     proof.a.assert_in_subgroup_excluding_infinity(0);
     proof.b.assert_in_subgroup_excluding_infinity(0);
@@ -96,7 +97,7 @@ pub fn verify_groth16_bn254(
     return multi_pairing_check_bn254_3P_2F_with_extra_miller_loop_result(
         G1G2Pair { p: vk_x, q: verification_key.gamma_g2 },
         G1G2Pair { p: proof.c, q: verification_key.delta_g2 },
-        G1G2Pair { p: proof.a, q: proof.b },
+        G1G2Pair { p: proof.a.negate(0), q: proof.b },
         verification_key.alpha_beta_miller_loop_result,
         lines,
         mpcheck_hint,
